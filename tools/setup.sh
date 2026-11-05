@@ -13,17 +13,17 @@ CMDLINE_ZIP="commandlinetools-linux-13114758_latest.zip"
 mkdir -p "$TOOLS"
 say() { printf '\n\033[1;33m==> %s\033[0m\n' "$*"; }
 
-# 1) JDK 17 (nur falls kein Java >= 17 vorhanden)
+# 1) JDK 17 (nur falls kein JDK 17 bis 21 mit javac vorhanden)
 java_ok() {
-  command -v java >/dev/null 2>&1 || return 1
+  command -v java >/dev/null 2>&1 && command -v javac >/dev/null 2>&1 || return 1
   local v
   v=$(java -version 2>&1 | awk -F'"' '/version/ {print $2}' | cut -d. -f1)
-  [ "${v:-0}" -ge 17 ] 2>/dev/null
+  [ "${v:-0}" -ge 17 ] && [ "${v:-0}" -le 21 ] 2>/dev/null
 }
 if [ -x "$JDK_DIR/bin/java" ]; then
   export JAVA_HOME="$JDK_DIR"
 elif java_ok; then
-  say "System-Java >= 17 gefunden, kein eigenes JDK nötig"
+  say "System-JDK 17 bis 21 gefunden, kein eigenes JDK nötig"
 else
   say "Lade JDK 17 (Temurin)"
   tmp=$(mktemp -d)
