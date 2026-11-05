@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../insights.dart';
 import '../widgets/shot_card.dart';
 import '../store.dart';
 import 'shot_editor.dart';
@@ -13,6 +14,7 @@ class ShotsScreen extends StatefulWidget {
 
 class _ShotsScreenState extends State<ShotsScreen> {
   bool _favOnly = false;
+  ShotSort _sort = ShotSort.newest;
 
   @override
   Widget build(BuildContext context) {
@@ -20,13 +22,27 @@ class _ShotsScreenState extends State<ShotsScreen> {
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) {
-        final shots = _favOnly
-            ? store.shots.where((s) => s.favorite).toList()
-            : store.shots;
+        final shots = sortShots(
+          _favOnly
+              ? store.shots.where((s) => s.favorite).toList()
+              : store.shots,
+          _sort,
+          store.targets,
+        );
         return Scaffold(
           appBar: AppBar(
             title: const Text('Kaffee-Tagebuch'),
             actions: [
+              PopupMenuButton<ShotSort>(
+                tooltip: 'Sortieren',
+                icon: const Icon(Icons.sort),
+                initialValue: _sort,
+                onSelected: (v) => setState(() => _sort = v),
+                itemBuilder: (_) => [
+                  for (final o in ShotSort.values)
+                    PopupMenuItem(value: o, child: Text(o.label)),
+                ],
+              ),
               IconButton(
                 tooltip: _favOnly ? 'Alle Shots' : 'Nur Favoriten',
                 icon: Icon(_favOnly ? Icons.favorite : Icons.favorite_border),

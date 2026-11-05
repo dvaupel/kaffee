@@ -24,6 +24,7 @@ class ShotCard extends StatelessWidget {
 
     final subtitle = <String>[
       if (showBean) fmtDateRel(shot.date),
+      if (shot.machine.isNotEmpty && store.machines.length > 1) shot.machine,
       if (shot.grind.isNotEmpty) 'Mahlgrad ${shot.grind}',
       if (shot.basket.isNotEmpty) shot.basket,
     ].join('  ·  ');
@@ -41,7 +42,9 @@ class ShotCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      showBean ? (bean?.name ?? 'Ohne Bohne') : fmtDateRel(shot.date),
+                      showBean
+                          ? (bean?.name ?? 'Ohne Bohne')
+                          : fmtDateRel(shot.date),
                       style: theme.textTheme.titleMedium,
                       overflow: TextOverflow.ellipsis,
                     ),

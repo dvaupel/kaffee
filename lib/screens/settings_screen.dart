@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../format.dart';
+import '../models.dart';
 import '../store.dart';
+import '../updater.dart';
+import 'update_dialog.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -14,27 +17,83 @@ class SettingsScreen extends StatelessWidget {
       listenable: store,
       builder: (context, _) {
         final t = store.targets;
+        final d = store.defaults;
         return Scaffold(
           appBar: AppBar(title: const Text('Setup')),
           body: ListView(
             padding: const EdgeInsets.only(bottom: 32),
             children: [
               const _Header('Ausrüstung'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                child: Text(
+                  'Tipp: Einen Eintrag gedrückt halten, um ihn als Standard '
+                  'für neue Shots anzupinnen.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+              ),
+              _ListEditor(
+                label: 'Maschine',
+                items: store.machines,
+                pinned: d.machine,
+                onChanged: (l) {
+                  store.machines = l;
+                  _keepPin(d, 'machine', l);
+                  store.save();
+                },
+                onPin: (v) {
+                  d.machine = v;
+                  store.save();
+                },
+              ),
               _ListEditor(
                 label: 'Siebträger',
                 items: store.portafilters,
+                pinned: d.portafilter,
                 onChanged: (l) {
                   store.portafilters = l;
+                  _keepPin(d, 'portafilter', l);
+                  store.save();
+                },
+                onPin: (v) {
+                  d.portafilter = v;
                   store.save();
                 },
               ),
               _ListEditor(
                 label: 'Siebe',
                 items: store.baskets,
+                pinned: d.basket,
                 onChanged: (l) {
                   store.baskets = l;
+                  _keepPin(d, 'basket', l);
                   store.save();
                 },
+                onPin: (v) {
+                  d.basket = v;
+                  store.save();
+                },
+              ),
+              const _Header('Standard-Experiment'),
+              _DefaultsCard(
+                defaults: d,
+                onChanged: store.save,
+              ),
+              const _Header('Bezug'),
+              Card(
+                child: SwitchListTile(
+                  secondary: const Icon(Icons.timer_outlined),
+                  title: const Text('Shot-Timer in der App'),
+                  subtitle: const Text(
+                      'Aus, wenn deine Waage selbst eine Zeit misst. Die '
+                      'Durchlaufzeit trägst du dann von Hand ein.'),
+                  value: store.useTimer,
+                  onChanged: (v) {
+                    store.useTimer = v;
+                    store.save();
+                  },
+                ),
               ),
               const _Header('Zielwerte'),
               Card(
@@ -61,6 +120,19 @@ class SettingsScreen extends StatelessWidget {
                       onTap: () => _editTargets(context),
                     ),
                   ],
+                ),
+              ),
+              const _Header('App'),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.system_update_outlined),
+                  title: const Text('Nach Update suchen'),
+                  subtitle: FutureBuilder<String>(
+                    future: currentVersion(),
+                    builder: (_, snap) =>
+                        Text('Installiert: ${snap.data ?? '…'}'),
+                  ),
+                  onTap: () => runUpdateCheck(context, silent: false),
                 ),
               ),
               const _Header('Daten'),
@@ -95,7 +167,7 @@ class SettingsScreen extends StatelessWidget {
                 child: Text(
                   '${store.shots.length} Shots, ${store.beans.length} Bohnen. '
                   'Die Daten liegen nur auf diesem Gerät.\n\n'
-                  'Kaffee-Tagebuch 0.1',
+                  'Kaffee-Tagebuch',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
@@ -105,6 +177,12 @@ class SettingsScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// Entfernt einen Pin, dessen Eintrag gelöscht wurde.
+  void _keepPin(Defaults d, String key, List<String> items) {
+    final v = d.text(key);
+    if (v != null && !items.contains(v)) d.setText(key, null);
   }
 
   Future<void> _editTargets(BuildContext context) async {
@@ -120,8 +198,7 @@ class SettingsScreen extends StatelessWidget {
     Widget field(String key, String label, String suffix) => Expanded(
           child: TextField(
             controller: c[key],
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(labelText: label, suffixText: suffix),
           ),
         );
@@ -202,10 +279,11 @@ class SettingsScreen extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await Store.instance.importJson(c.text);
-      messenger.showSnackBar(const SnackBar(content: Text('Import erfolgreich')));
+      messenger
+          .showSnackBar(const SnackBar(content: Text('Import erfolgreich')));
     } catch (e) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Import fehlgeschlagen: ungültiges Format')));
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Import fehlgeschlagen: ungültiges Format')));
     }
   }
 }
@@ -233,11 +311,15 @@ class _ListEditor extends StatelessWidget {
     required this.label,
     required this.items,
     required this.onChanged,
+    required this.pinned,
+    required this.onPin,
   });
 
   final String label;
   final List<String> items;
   final ValueChanged<List<String>> onChanged;
+  final String? pinned;
+  final ValueChanged<String?> onPin;
 
   Future<void> _add(BuildContext context) async {
     final c = TextEditingController();
@@ -284,10 +366,22 @@ class _ListEditor extends StatelessWidget {
               runSpacing: 4,
               children: [
                 for (final item in items)
-                  InputChip(
-                    label: Text(item),
-                    onDeleted: () =>
-                        onChanged(items.where((e) => e != item).toList()),
+                  GestureDetector(
+                    onLongPress: () {
+                      HapticFeedback.heavyImpact();
+                      onPin(item == pinned ? null : item);
+                    },
+                    child: InputChip(
+                      avatar: item == pinned
+                          ? const Icon(Icons.push_pin, size: 18)
+                          : null,
+                      label: Text(item),
+                      selected: item == pinned,
+                      showCheckmark: false,
+                      onPressed: () {},
+                      onDeleted: () =>
+                          onChanged(items.where((e) => e != item).toList()),
+                    ),
                   ),
                 ActionChip(
                   avatar: const Icon(Icons.add, size: 18),
@@ -298,6 +392,137 @@ class _ListEditor extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Übersicht der angepinnten Standardwerte. Tippen ändert Zahlen und Mahlgrad,
+/// gedrückt halten löst den Pin.
+class _DefaultsCard extends StatelessWidget {
+  const _DefaultsCard({required this.defaults, required this.onChanged});
+
+  final Defaults defaults;
+  final Future<void> Function() onChanged;
+
+  Future<void> _edit(BuildContext context, String key, String label,
+      String suffix, bool numeric) async {
+    final current = numeric
+        ? (defaults.number(key) == null ? '' : fmtSmart(defaults.number(key)!))
+        : (defaults.text(key) ?? '');
+    final c = TextEditingController(text: current);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$label als Standard'),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          keyboardType: numeric
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : TextInputType.text,
+          decoration: InputDecoration(labelText: label, suffixText: suffix),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Anpinnen'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (numeric) {
+      defaults.setNumber(key, parseNum(c.text));
+    } else {
+      defaults.setText(key, c.text.trim());
+    }
+    await onChanged();
+  }
+
+  Widget _tile(BuildContext context, IconData icon, String label, String? value,
+      {required VoidCallback? onTap, required VoidCallback onClear}) {
+    final pinned = value != null;
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(label),
+      subtitle: Text(pinned ? value : 'wie beim letzten Shot'),
+      trailing: Icon(
+        pinned ? Icons.push_pin : Icons.push_pin_outlined,
+        color: pinned ? scheme.primary : scheme.outline,
+      ),
+      onTap: onTap,
+      onLongPress: pinned
+          ? () {
+              HapticFeedback.heavyImpact();
+              onClear();
+            }
+          : null,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = defaults;
+    Future<void> clear(String key, {bool numeric = false}) {
+      if (numeric) {
+        d.setNumber(key, null);
+      } else {
+        d.setText(key, null);
+      }
+      return onChanged();
+    }
+
+    return Card(
+      child: Column(
+        children: [
+          _tile(context, Icons.coffee_maker_outlined, 'Maschine', d.machine,
+              onTap: null, onClear: () => clear('machine')),
+          _tile(context, Icons.hardware_outlined, 'Siebträger', d.portafilter,
+              onTap: null, onClear: () => clear('portafilter')),
+          _tile(context, Icons.filter_alt_outlined, 'Sieb', d.basket,
+              onTap: null, onClear: () => clear('basket')),
+          _tile(
+            context,
+            Icons.thermostat,
+            'Temperatur',
+            d.temperature == null ? null : '${fmtSmart(d.temperature!)} °C',
+            onTap: () =>
+                _edit(context, 'temperature', 'Temperatur', '°C', true),
+            onClear: () => clear('temperature', numeric: true),
+          ),
+          _tile(
+            context,
+            Icons.scale_outlined,
+            'Bohnen-Dosis',
+            d.doseIn == null ? null : '${fmtSmart(d.doseIn!)} g',
+            onTap: () => _edit(context, 'doseIn', 'Dosis', 'g', true),
+            onClear: () => clear('doseIn', numeric: true),
+          ),
+          _tile(
+            context,
+            Icons.tune,
+            'Mahlgrad',
+            d.grind,
+            onTap: () => _edit(context, 'grind', 'Mahlgrad', '', false),
+            onClear: () => clear('grind'),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Text(
+              'Angepinnte Werte gelten für jeden neuen Shot. Alles andere '
+              'übernimmst du vom letzten Shot, so bleibt nur die Variable, '
+              'die du gerade testest. Gedrückt halten löst den Pin.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ],
       ),
     );
   }

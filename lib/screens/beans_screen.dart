@@ -87,7 +87,8 @@ class _BeansScreenState extends State<BeansScreen> {
         final beans = store.beans
             .where((b) => _showArchived || !b.archived)
             .toList()
-          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+          ..sort(
+              (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
         return Scaffold(
           appBar: AppBar(
             title: const Text('Bohnen'),
@@ -334,7 +335,8 @@ class BeanDetailScreen extends StatelessWidget {
               if (shots.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(32),
-                  child: Center(child: Text('Noch keine Shots mit dieser Bohne.')),
+                  child:
+                      Center(child: Text('Noch keine Shots mit dieser Bohne.')),
                 ),
               for (final s in shots) ShotCard(shot: s, showBean: false),
             ],

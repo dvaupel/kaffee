@@ -60,6 +60,8 @@ class _ShotEditorState extends State<ShotEditor> {
   void initState() {
     super.initState();
     s = widget.initial;
+    final machines = Store.instance.machines;
+    if (s.machine.isEmpty && machines.length == 1) s.machine = machines.first;
     _dirty = widget.isNew;
     _grind = TextEditingController(text: s.grind);
     _temp = TextEditingController(text: _n(s.temperature));
@@ -161,13 +163,12 @@ class _ShotEditorState extends State<ShotEditor> {
 
     final dose = parseNum(_dose.text);
     final out = parseNum(_yield.text);
-    final time = _sw.isRunning
-        ? _sw.elapsedMilliseconds / 1000
-        : parseNum(_time.text);
+    final time =
+        _sw.isRunning ? _sw.elapsedMilliseconds / 1000 : parseNum(_time.text);
     final pressure = parseNum(_pressure.text);
     final ratio = ratioOf(dose, out);
-    final tip = dialInTip(
-        _sw.isRunning ? null : time, s.acidity, s.bitterness, t);
+    final tip =
+        dialInTip(_sw.isRunning ? null : time, s.acidity, s.bitterness, t);
 
     const gap = SizedBox(height: 12);
 
@@ -187,6 +188,11 @@ class _ShotEditorState extends State<ShotEditor> {
               icon: Icon(s.favorite ? Icons.favorite : Icons.favorite_border),
               onPressed: () => _mark(() => s.favorite = !s.favorite),
             ),
+            IconButton(
+              tooltip: 'Setup als Standard anpinnen',
+              icon: const Icon(Icons.push_pin_outlined),
+              onPressed: _pinAll,
+            ),
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: FilledButton(
@@ -204,22 +210,36 @@ class _ShotEditorState extends State<ShotEditor> {
             gap,
             Row(
               children: [
-                Expanded(child: _field(_grind, 'Mahlgrad', text: true)),
+                Expanded(
+                    child: _field(_grind, 'Mahlgrad',
+                        text: true, pinKey: 'grind')),
                 const SizedBox(width: 12),
-                Expanded(child: _field(_temp, 'Temperatur', suffix: '°C')),
+                Expanded(
+                    child: _field(_temp, 'Temperatur',
+                        suffix: '°C', pinKey: 'temperature')),
               ],
             ),
             gap,
+            if (store.machines.length > 1 || s.machine.isNotEmpty) ...[
+              _choice('Maschine', store.machines, s.machine,
+                  (v) => s.machine = v, 'machine'),
+              gap,
+            ],
             _choice('Siebträger', store.portafilters, s.portafilter,
-                (v) => s.portafilter = v),
+                (v) => s.portafilter = v, 'portafilter'),
             gap,
-            _choice('Sieb', store.baskets, s.basket, (v) => s.basket = v),
+            _choice(
+                'Sieb', store.baskets, s.basket, (v) => s.basket = v, 'basket'),
             _section('Bezug'),
-            _timerCard(scheme, theme, time, t),
-            gap,
+            if (store.useTimer) ...[
+              _timerCard(scheme, theme, time, t),
+              gap,
+            ],
             Row(
               children: [
-                Expanded(child: _field(_dose, 'Bohnen', suffix: 'g')),
+                Expanded(
+                    child:
+                        _field(_dose, 'Bohnen', suffix: 'g', pinKey: 'doseIn')),
                 const SizedBox(width: 12),
                 Expanded(child: _field(_yield, 'Espresso', suffix: 'g')),
               ],
@@ -235,8 +255,8 @@ class _ShotEditorState extends State<ShotEditor> {
             gap,
             _statusCard(theme, t, dose, ratio, time, pressure),
             _section('Geschmack'),
-            _scale('Säure', s.acidity, _acidityLabels,
-                (v) => s.acidity = v, scheme),
+            _scale('Säure', s.acidity, _acidityLabels, (v) => s.acidity = v,
+                scheme),
             _scale('Bitterkeit', s.bitterness, _bitternessLabels,
                 (v) => s.bitterness = v, scheme),
             _stars(theme),
@@ -294,14 +314,82 @@ class _ShotEditorState extends State<ShotEditor> {
       );
 
   Widget _field(TextEditingController c, String label,
-      {String? suffix, bool text = false}) {
+      {String? suffix, bool text = false, String? pinKey}) {
+    final d = Store.instance.defaults;
+    var pinned = false;
+    String? helper;
+    if (pinKey != null) {
+      final pin = text ? d.text(pinKey) : d.number(pinKey);
+      if (pin != null) {
+        final shown = pin is double ? fmtSmart(pin) : pin.toString();
+        final now = text ? c.text.trim() : _n(parseNum(c.text));
+        pinned = now == shown;
+        if (!pinned) helper = 'Standard: $shown';
+      }
+    }
+    final hasPin =
+        pinKey != null && (text ? d.text(pinKey) : d.number(pinKey)) != null;
     return TextField(
       controller: c,
       keyboardType: text
           ? TextInputType.text
           : const TextInputType.numberWithOptions(decimal: true),
-      decoration: InputDecoration(labelText: label, suffixText: suffix),
+      decoration: InputDecoration(
+        labelText: label,
+        suffixText: suffix,
+        helperText: helper,
+        suffixIcon: pinKey == null
+            ? null
+            : IconButton(
+                tooltip: hasPin ? 'Pin lösen' : 'Als Standard anpinnen',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  hasPin ? Icons.push_pin : Icons.push_pin_outlined,
+                  size: 20,
+                  color: pinned ? Theme.of(context).colorScheme.primary : null,
+                ),
+                onPressed: () => _togglePin(pinKey, c, text),
+              ),
+      ),
     );
+  }
+
+  void _togglePin(String key, TextEditingController c, bool text) {
+    final d = Store.instance.defaults;
+    HapticFeedback.mediumImpact();
+    setState(() {
+      if (text) {
+        d.setText(key, d.text(key) != null ? null : c.text.trim());
+      } else {
+        d.setNumber(key, d.number(key) != null ? null : parseNum(c.text));
+      }
+    });
+    Store.instance.save();
+  }
+
+  void _pinChoice(String key, String value) {
+    final d = Store.instance.defaults;
+    HapticFeedback.heavyImpact();
+    setState(() => d.setText(key, d.text(key) == value ? null : value));
+    Store.instance.save();
+  }
+
+  /// Übernimmt das komplette Setup dieses Shots als neuen Standard.
+  void _pinAll() {
+    _apply();
+    final d = Store.instance.defaults;
+    HapticFeedback.heavyImpact();
+    setState(() {
+      d.setText('machine', s.machine);
+      d.setText('portafilter', s.portafilter);
+      d.setText('basket', s.basket);
+      d.setText('grind', s.grind);
+      d.temperature = s.temperature;
+      d.doseIn = s.doseIn;
+    });
+    Store.instance.save();
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Setup als Standard für neue Shots angepinnt')));
   }
 
   Future<void> _addBean() async {
@@ -352,10 +440,11 @@ class _ShotEditorState extends State<ShotEditor> {
   }
 
   Widget _choice(String label, List<String> options, String current,
-      void Function(String) set) {
+      void Function(String) set, String pinKey) {
     final opts = [...options];
     if (current.isNotEmpty && !opts.contains(current)) opts.add(current);
     if (opts.isEmpty) return const SizedBox.shrink();
+    final pinned = Store.instance.defaults.text(pinKey);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -366,10 +455,15 @@ class _ShotEditorState extends State<ShotEditor> {
           runSpacing: 4,
           children: [
             for (final o in opts)
-              ChoiceChip(
-                label: Text(o),
-                selected: o == current,
-                onSelected: (_) => _mark(() => set(o)),
+              GestureDetector(
+                onLongPress: () => _pinChoice(pinKey, o),
+                child: ChoiceChip(
+                  avatar:
+                      o == pinned ? const Icon(Icons.push_pin, size: 16) : null,
+                  label: Text(o),
+                  selected: o == current,
+                  onSelected: (_) => _mark(() => set(o)),
+                ),
               ),
           ],
         ),
@@ -449,14 +543,21 @@ class _ShotEditorState extends State<ShotEditor> {
           children: [
             Row(
               children: [
-                _stat(theme, 'Verhältnis',
+                _stat(
+                    theme,
+                    'Verhältnis',
                     ratio == null ? '–' : '1:${fmtNum(ratio, digits: 2)}',
-                    t.ratioLevel(ratio), 'Ziel 1:${fmtNum(t.ratio)}'),
-                _stat(theme, 'Zeit',
+                    t.ratioLevel(ratio),
+                    'Ziel 1:${fmtNum(t.ratio)}'),
+                _stat(
+                    theme,
+                    'Zeit',
                     time == null ? '–' : '${fmtNum(time)} s',
                     t.timeLevel(time),
                     'Ziel ${fmtSmart(t.timeMin)}–${fmtSmart(t.timeMax)} s'),
-                _stat(theme, 'Druck',
+                _stat(
+                    theme,
+                    'Druck',
                     pressure == null ? '–' : '${fmtSmart(pressure)} bar',
                     t.pressureLevel(pressure),
                     'Ziel ${fmtSmart(t.pressureMin)}–${fmtSmart(t.pressureMax)}'),
@@ -476,8 +577,8 @@ class _ShotEditorState extends State<ShotEditor> {
     );
   }
 
-  Widget _stat(ThemeData theme, String label, String value, Level level,
-      String hint) {
+  Widget _stat(
+      ThemeData theme, String label, String value, Level level, String hint) {
     final scheme = theme.colorScheme;
     final color =
         level == Level.none ? scheme.onSurface : levelColor(level, scheme);

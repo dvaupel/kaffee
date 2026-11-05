@@ -41,6 +41,7 @@ class Shot {
   final String id;
   DateTime date;
   String? beanId;
+  String machine;
   String grind;
   String portafilter;
   String basket;
@@ -65,6 +66,7 @@ class Shot {
     required this.id,
     required this.date,
     this.beanId,
+    this.machine = '',
     this.grind = '',
     this.portafilter = '',
     this.basket = '',
@@ -88,6 +90,7 @@ class Shot {
         'id': id,
         'date': date.toIso8601String(),
         'beanId': beanId,
+        'machine': machine,
         'grind': grind,
         'portafilter': portafilter,
         'basket': basket,
@@ -107,6 +110,7 @@ class Shot {
         id: j['id'] as String,
         date: DateTime.tryParse(j['date'] as String? ?? '') ?? DateTime.now(),
         beanId: j['beanId'] as String?,
+        machine: j['machine'] as String? ?? '',
         grind: j['grind'] as String? ?? '',
         portafilter: j['portafilter'] as String? ?? '',
         basket: j['basket'] as String? ?? '',
@@ -179,6 +183,107 @@ class Targets {
         ratio: _d(j['ratio']) ?? 2.5,
         pressureMin: _d(j['pressureMin']) ?? 9,
         pressureMax: _d(j['pressureMax']) ?? 11,
+      );
+}
+
+/// Angepinnte Standardwerte für neue Shots. `null` = nicht angepinnt,
+/// der Wert kommt dann vom letzten Shot.
+class Defaults {
+  String? machine;
+  String? portafilter;
+  String? basket;
+  String? grind;
+  double? temperature;
+  double? doseIn;
+
+  Defaults({
+    this.machine,
+    this.portafilter,
+    this.basket,
+    this.grind,
+    this.temperature,
+    this.doseIn,
+  });
+
+  bool get isEmpty =>
+      machine == null &&
+      portafilter == null &&
+      basket == null &&
+      grind == null &&
+      temperature == null &&
+      doseIn == null;
+
+  /// Textwerte: 'machine', 'portafilter', 'basket', 'grind'.
+  String? text(String key) => switch (key) {
+        'machine' => machine,
+        'portafilter' => portafilter,
+        'basket' => basket,
+        'grind' => grind,
+        _ => null,
+      };
+
+  void setText(String key, String? v) {
+    final value = (v == null || v.isEmpty) ? null : v;
+    switch (key) {
+      case 'machine':
+        machine = value;
+      case 'portafilter':
+        portafilter = value;
+      case 'basket':
+        basket = value;
+      case 'grind':
+        grind = value;
+    }
+  }
+
+  /// Zahlenwerte: 'temperature', 'doseIn'.
+  double? number(String key) => switch (key) {
+        'temperature' => temperature,
+        'doseIn' => doseIn,
+        _ => null,
+      };
+
+  void setNumber(String key, double? v) {
+    switch (key) {
+      case 'temperature':
+        temperature = v;
+      case 'doseIn':
+        doseIn = v;
+    }
+  }
+
+  void clear() {
+    machine = portafilter = basket = grind = null;
+    temperature = doseIn = null;
+  }
+
+  /// Überschreibt im Shot alle angepinnten Felder.
+  Shot applyTo(Shot s) {
+    if (machine != null) s.machine = machine!;
+    if (portafilter != null) s.portafilter = portafilter!;
+    if (basket != null) s.basket = basket!;
+    if (grind != null) s.grind = grind!;
+    if (temperature != null) s.temperature = temperature;
+    if (doseIn != null) s.doseIn = doseIn;
+    return s;
+  }
+
+  Map<String, dynamic> toJson() => {
+        'machine': machine,
+        'portafilter': portafilter,
+        'basket': basket,
+        'grind': grind,
+        'temperature': temperature,
+        'doseIn': doseIn,
+      };
+
+  factory Defaults.fromJson(Map<String, dynamic> j) => Defaults(
+        machine: j['machine'] as String?,
+        portafilter: j['portafilter'] as String?,
+        basket: j['basket'] as String?,
+        grind: j['grind'] as String?,
+        temperature: _d(j['temperature']),
+        doseIn: _d(j['doseIn']),
       );
 }
 

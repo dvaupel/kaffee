@@ -13,9 +13,14 @@ class Store extends ChangeNotifier {
 
   List<Bean> beans = [];
   List<Shot> shots = [];
+  List<String> machines = ['GRAEF Marchesta'];
   List<String> portafilters = ['Original GRAEF'];
   List<String> baskets = ['Einfach', 'Doppelt'];
   Targets targets = Targets();
+  Defaults defaults = Defaults();
+
+  /// Eingebauter Shot-Timer; aus, wenn die Waage selbst eine Zeit liefert.
+  bool useTimer = true;
   int _seq = 0;
 
   String newId() => '${DateTime.now().microsecondsSinceEpoch}${_seq++}';
@@ -36,9 +41,12 @@ class Store extends ChangeNotifier {
         'version': 1,
         'beans': beans.map((b) => b.toJson()).toList(),
         'shots': shots.map((s) => s.toJson()).toList(),
+        'machines': machines,
         'portafilters': portafilters,
         'baskets': baskets,
         'targets': targets.toJson(),
+        'defaults': defaults.toJson(),
+        'useTimer': useTimer,
       };
 
   void _fromJson(Map<String, dynamic> j) {
@@ -48,12 +56,17 @@ class Store extends ChangeNotifier {
     shots = (j['shots'] as List? ?? [])
         .map((e) => Shot.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
+    final mc = j['machines'];
+    if (mc is List) machines = mc.map((e) => e.toString()).toList();
     final pf = j['portafilters'];
     if (pf is List) portafilters = pf.map((e) => e.toString()).toList();
     final bk = j['baskets'];
     if (bk is List) baskets = bk.map((e) => e.toString()).toList();
     final tg = j['targets'];
     if (tg is Map) targets = Targets.fromJson(Map<String, dynamic>.from(tg));
+    final df = j['defaults'];
+    if (df is Map) defaults = Defaults.fromJson(Map<String, dynamic>.from(df));
+    useTimer = j['useTimer'] as bool? ?? true;
     _sort();
   }
 
@@ -131,12 +144,15 @@ class Store extends ChangeNotifier {
     await save();
   }
 
-  /// Neuer Shot mit dem Setup des letzten Shots vorbelegt.
-  Shot newShotTemplate() {
+  /// Neuer Shot: Setup des letzten Shots, darüber die angepinnten Standardwerte.
+  Shot newShotTemplate() => defaults.applyTo(_baseTemplate());
+
+  Shot _baseTemplate() {
     if (shots.isNotEmpty) return duplicate(shots.first);
     return Shot(
       id: newId(),
       date: DateTime.now(),
+      machine: machines.isNotEmpty ? machines.first : '',
       portafilter: portafilters.isNotEmpty ? portafilters.first : '',
       basket: baskets.length > 1
           ? baskets[1]
@@ -150,6 +166,7 @@ class Store extends ChangeNotifier {
         id: newId(),
         date: DateTime.now(),
         beanId: src.beanId,
+        machine: src.machine,
         grind: src.grind,
         portafilter: src.portafilter,
         basket: src.basket,

@@ -1,0 +1,59 @@
+name: Release
+
+# Ein Tag wie v0.2.0 pushen -> signierte APK bauen und als GitHub Release veröffentlichen.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # für die Build-Nummer aus der Commit-Anzahl
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Signierschlüssel bereitstellen
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          cat > android/key.properties <<PROPS
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEYSTORE_PASSWORD
+          keyAlias=kaffee
+          storeFile=$RUNNER_TEMP/release.jks
+          PROPS
+
+      - name: Prüfen
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - name: APK bauen
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BUILD_NO="$(git rev-list --count HEAD)"
+          flutter build apk --release --split-per-abi --target-platform android-arm64 \
+            --build-name "$VERSION" --build-number "$BUILD_NO"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "kaffee-$VERSION.apk"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: kaffee-*.apk
+          generate_release_notes: true

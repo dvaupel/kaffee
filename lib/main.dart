@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'screens/beans_screen.dart';
+import 'screens/insights_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/shots_screen.dart';
+import 'screens/update_dialog.dart';
 import 'store.dart';
 import 'theme.dart';
 
@@ -38,11 +40,24 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) runUpdateCheck(context);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
         index: _index,
-        children: const [ShotsScreen(), BeansScreen(), SettingsScreen()],
+        children: const [
+          ShotsScreen(),
+          BeansScreen(),
+          InsightsScreen(),
+          SettingsScreen(),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
@@ -57,6 +72,11 @@ class _HomeShellState extends State<HomeShell> {
             icon: Icon(Icons.eco_outlined),
             selectedIcon: Icon(Icons.eco),
             label: 'Bohnen',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights),
+            label: 'Erkenntnisse',
           ),
           NavigationDestination(
             icon: Icon(Icons.tune_outlined),

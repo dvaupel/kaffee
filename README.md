@@ -6,11 +6,16 @@ Parameter vergleichen, pro Bohne das beste Rezept finden.
 ## Funktionen (v0.1)
 
 - Shot erfassen: Bohne, Mahlgrad, Siebträger, Sieb, Temperatur, Dosis, Ausbeute, Zeit, Druck
-- Shot-Timer mit Ampel gegen die Zielwerte (25 bis 28 s, 1:2,5, 9 bis 11 bar, anpassbar)
+- Shot-Timer mit Ampel (im Setup abschaltbar, z. B. bei Waage mit eigenem Timer) gegen die Zielwerte (25 bis 28 s, 1:2,5, 9 bis 11 bar, anpassbar)
 - Geschmack: Säure, Bitterkeit, Gesamteindruck, Notizen
 - Einstellhilfe ("feiner mahlen", "gröber mahlen", ...)
 - Neuer Shot übernimmt das Setup des letzten Shots
 - Bohnen mit "bestem Rezept", Favoriten
+- Maschine, Siebträger und Siebe im Setup; Eintrag gedrückt halten pinnt ihn als Standard
+  für neue Shots (auch im Shot-Editor per Pin-Symbol oder langem Druck auf einen Chip)
+- Shots sortieren nach Datum, Bewertung oder getroffenen Zielwerten
+- Tab "Erkenntnisse": Bestenliste, nächster Schritt je Bohne, Sweet Spot, Einflussfaktoren
+  auf die Bewertung und Vergleiche (Ausrüstung, Zielwerte)
 - Export/Import über die Zwischenablage, Daten bleiben lokal auf dem Gerät
 
 ## Einrichtung (einmalig, ohne Android Studio)

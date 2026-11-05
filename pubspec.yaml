@@ -1,7 +1,7 @@
 name: kaffee
 description: Espresso-Tagebuch zum Einstellen der Siebträgermaschine.
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+1
 
 environment:
   sdk: '>=3.5.0 <4.0.0'
@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  http: ^1.6.0
+  open_filex: ^5.0.0
+  package_info_plus: ^10.2.2
   shared_preferences: ^2.3.0
 
 dev_dependencies:
