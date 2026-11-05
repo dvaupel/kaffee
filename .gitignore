@@ -1,0 +1,25 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# Nur Android wird gebaut; android/ entsteht beim ersten Build und wird eingecheckt
+/ios/
+/web/
+/linux/
+/macos/
+/windows/
+/dist/
+/android/key.properties
+*.jks
+*.keystore
+
+# IDE
+.idea/
+.vscode/
+*.iml
