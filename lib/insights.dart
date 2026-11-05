@@ -79,6 +79,7 @@ class _Factor {
 
 final _factors = <_Factor>[
   _Factor('Temperatur', ' °C', (s) => s.temperature),
+  _Factor('Temperaturstufe', '', (s) => s.tempLevel?.toDouble()),
   _Factor('Dosis', ' g', (s) => s.doseIn),
   _Factor('Verhältnis', '', (s) => s.ratio),
   _Factor('Durchlaufzeit', ' s', (s) => s.timeSec),

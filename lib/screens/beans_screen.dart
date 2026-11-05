@@ -157,7 +157,7 @@ String recipeLine(Shot s) {
     '${fmtNum(s.doseIn)} → ${fmtNum(s.yieldOut)} g',
     if (s.timeSec != null) '${fmtSmart(s.timeSec!)} s',
     if (s.grind.isNotEmpty) 'Mahlgrad ${s.grind}',
-    if (s.temperature != null) '${fmtSmart(s.temperature!)} °C',
+    if (s.tempText != null) s.tempText!,
   ];
   return parts.join(', ');
 }

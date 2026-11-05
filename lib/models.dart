@@ -1,9 +1,35 @@
 /// Datenmodell: Bohnen, Shots, Zielwerte.
 library;
 
+import 'format.dart';
+
 enum Level { ok, near, off, none }
 
 double? _d(dynamic v) => v == null ? null : (v as num).toDouble();
+
+/// Eine Espressomaschine. `tempLevels` > 0: die Maschine kennt keine Gradzahl,
+/// sondern stellt die Temperatur in so vielen Stufen ein.
+class Machine {
+  Machine(this.name, {this.tempLevels = 0});
+
+  String name;
+  int tempLevels;
+
+  bool get hasLevels => tempLevels > 0;
+
+  Map<String, dynamic> toJson() => {'name': name, 'tempLevels': tempLevels};
+
+  /// Akzeptiert auch das alte Format (nur der Name als Text).
+  factory Machine.fromJson(dynamic j) {
+    if (j is Map) {
+      return Machine(
+        j['name']?.toString() ?? '',
+        tempLevels: (j['tempLevels'] as num?)?.toInt() ?? 0,
+      );
+    }
+    return Machine(j.toString());
+  }
+}
 
 class Bean {
   final String id;
@@ -46,6 +72,9 @@ class Shot {
   String portafilter;
   String basket;
   double? temperature;
+
+  /// Temperaturstufe der Maschine (1 .. n), falls sie keine Gradzahl kennt.
+  int? tempLevel;
   double? doseIn;
   double? yieldOut;
   double? timeSec;
@@ -71,6 +100,7 @@ class Shot {
     this.portafilter = '',
     this.basket = '',
     this.temperature,
+    this.tempLevel,
     this.doseIn,
     this.yieldOut,
     this.timeSec,
@@ -84,6 +114,15 @@ class Shot {
 
   double? get ratio => ratioOf(doseIn, yieldOut);
 
+  /// Temperatur als Text: Grad und/oder Stufe, `null` ohne Angabe.
+  String? get tempText {
+    final parts = [
+      if (temperature != null) '${fmtSmart(temperature!)} °C',
+      if (tempLevel != null) 'Stufe $tempLevel',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
   Shot clone() => Shot.fromJson(toJson());
 
   Map<String, dynamic> toJson() => {
@@ -95,6 +134,7 @@ class Shot {
         'portafilter': portafilter,
         'basket': basket,
         'temperature': temperature,
+        'tempLevel': tempLevel,
         'doseIn': doseIn,
         'yieldOut': yieldOut,
         'timeSec': timeSec,
@@ -115,6 +155,7 @@ class Shot {
         portafilter: j['portafilter'] as String? ?? '',
         basket: j['basket'] as String? ?? '',
         temperature: _d(j['temperature']),
+        tempLevel: (j['tempLevel'] as num?)?.toInt(),
         doseIn: _d(j['doseIn']),
         yieldOut: _d(j['yieldOut']),
         timeSec: _d(j['timeSec']),
@@ -194,6 +235,7 @@ class Defaults {
   String? basket;
   String? grind;
   double? temperature;
+  int? tempLevel;
   double? doseIn;
 
   Defaults({
@@ -202,6 +244,7 @@ class Defaults {
     this.basket,
     this.grind,
     this.temperature,
+    this.tempLevel,
     this.doseIn,
   });
 
@@ -211,6 +254,7 @@ class Defaults {
       basket == null &&
       grind == null &&
       temperature == null &&
+      tempLevel == null &&
       doseIn == null;
 
   /// Textwerte: 'machine', 'portafilter', 'basket', 'grind'.
@@ -255,6 +299,7 @@ class Defaults {
   void clear() {
     machine = portafilter = basket = grind = null;
     temperature = doseIn = null;
+    tempLevel = null;
   }
 
   /// Überschreibt im Shot alle angepinnten Felder.
@@ -264,6 +309,7 @@ class Defaults {
     if (basket != null) s.basket = basket!;
     if (grind != null) s.grind = grind!;
     if (temperature != null) s.temperature = temperature;
+    if (tempLevel != null) s.tempLevel = tempLevel;
     if (doseIn != null) s.doseIn = doseIn;
     return s;
   }
@@ -274,6 +320,7 @@ class Defaults {
         'basket': basket,
         'grind': grind,
         'temperature': temperature,
+        'tempLevel': tempLevel,
         'doseIn': doseIn,
       };
 
@@ -283,6 +330,7 @@ class Defaults {
         basket: j['basket'] as String?,
         grind: j['grind'] as String?,
         temperature: _d(j['temperature']),
+        tempLevel: (j['tempLevel'] as num?)?.toInt(),
         doseIn: _d(j['doseIn']),
       );
 }

@@ -80,4 +80,20 @@ void main() {
     expect(isNewerVersion('v0.1.9', '0.2.0'), isFalse);
     expect(isNewerVersion('nightly', '0.2.0'), isFalse);
   });
+
+  test('Maschine: Stufen im JSON, altes Format bleibt lesbar', () {
+    final m = Machine.fromJson(Machine('Gräf', tempLevels: 5).toJson());
+    expect(m.name, 'Gräf');
+    expect(m.tempLevels, 5);
+    expect(Machine.fromJson('Alt').tempLevels, 0);
+  });
+
+  test('Temperaturstufe: Text, Standardwert und JSON', () {
+    final shot = Shot(id: 'a', date: DateTime(2026), tempLevel: 3);
+    expect(shot.tempText, 'Stufe 3');
+    expect(Shot.fromJson(shot.toJson()).tempLevel, 3);
+    final d = Defaults(tempLevel: 4);
+    expect(d.applyTo(Shot(id: 'b', date: DateTime(2026))).tempLevel, 4);
+    expect(Defaults.fromJson(d.toJson()).tempLevel, 4);
+  });
 }

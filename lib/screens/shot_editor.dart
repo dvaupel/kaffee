@@ -61,7 +61,9 @@ class _ShotEditorState extends State<ShotEditor> {
     super.initState();
     s = widget.initial;
     final machines = Store.instance.machines;
-    if (s.machine.isEmpty && machines.length == 1) s.machine = machines.first;
+    if (s.machine.isEmpty && machines.length == 1) {
+      s.machine = machines.first.name;
+    }
     _dirty = widget.isNew;
     _grind = TextEditingController(text: s.grind);
     _temp = TextEditingController(text: _n(s.temperature));
@@ -111,8 +113,15 @@ class _ShotEditorState extends State<ShotEditor> {
   }
 
   void _apply() {
+    // Je nach Maschine zählt nur Gradzahl oder Stufe.
+    final levels = Store.instance.tempLevelsFor(s.machine);
+    if (levels > 0) {
+      s.temperature = null;
+    } else {
+      s.tempLevel = null;
+    }
     s.grind = _grind.text.trim();
-    s.temperature = parseNum(_temp.text);
+    if (levels == 0) s.temperature = parseNum(_temp.text);
     s.doseIn = parseNum(_dose.text);
     s.yieldOut = parseNum(_yield.text);
     s.timeSec = parseNum(_time.text);
@@ -157,6 +166,7 @@ class _ShotEditorState extends State<ShotEditor> {
   @override
   Widget build(BuildContext context) {
     final store = Store.instance;
+    final levels = store.tempLevelsFor(s.machine);
     final t = store.targets;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -208,20 +218,25 @@ class _ShotEditorState extends State<ShotEditor> {
             _section('Setup'),
             _beanPicker(store),
             gap,
-            Row(
-              children: [
-                Expanded(
-                    child: _field(_grind, 'Mahlgrad',
-                        text: true, pinKey: 'grind')),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: _field(_temp, 'Temperatur',
-                        suffix: '°C', pinKey: 'temperature')),
-              ],
-            ),
+            if (levels > 0) ...[
+              _field(_grind, 'Mahlgrad', text: true, pinKey: 'grind'),
+              gap,
+              _levelPicker(levels),
+            ] else
+              Row(
+                children: [
+                  Expanded(
+                      child: _field(_grind, 'Mahlgrad',
+                          text: true, pinKey: 'grind')),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: _field(_temp, 'Temperatur',
+                          suffix: '°C', pinKey: 'temperature')),
+                ],
+              ),
             gap,
             if (store.machines.length > 1 || s.machine.isNotEmpty) ...[
-              _choice('Maschine', store.machines, s.machine,
+              _choice('Maschine', store.machineNames, s.machine,
                   (v) => s.machine = v, 'machine'),
               gap,
             ],
@@ -385,6 +400,7 @@ class _ShotEditorState extends State<ShotEditor> {
       d.setText('basket', s.basket);
       d.setText('grind', s.grind);
       d.temperature = s.temperature;
+      d.tempLevel = s.tempLevel;
       d.doseIn = s.doseIn;
     });
     Store.instance.save();
@@ -434,6 +450,43 @@ class _ShotEditorState extends State<ShotEditor> {
           tooltip: 'Neue Bohne',
           icon: const Icon(Icons.add),
           onPressed: _addBean,
+        ),
+      ],
+    );
+  }
+
+  /// Temperaturstufen der Maschine; erneutes Tippen wählt ab, gedrückt halten pinnt.
+  Widget _levelPicker(int count) {
+    final d = Store.instance.defaults;
+    // Stufen eines älteren Shots bleiben auswählbar, auch wenn die Zahl sank.
+    final shown = count > (s.tempLevel ?? 0) ? count : s.tempLevel!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Temperaturstufe', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (var i = 1; i <= shown; i++)
+              GestureDetector(
+                onLongPress: () {
+                  HapticFeedback.heavyImpact();
+                  setState(() => d.tempLevel = d.tempLevel == i ? null : i);
+                  Store.instance.save();
+                },
+                child: ChoiceChip(
+                  avatar: d.tempLevel == i
+                      ? const Icon(Icons.push_pin, size: 16)
+                      : null,
+                  label: Text('$i'),
+                  selected: s.tempLevel == i,
+                  onSelected: (_) =>
+                      _mark(() => s.tempLevel = s.tempLevel == i ? null : i),
+                ),
+              ),
+          ],
         ),
       ],
     );

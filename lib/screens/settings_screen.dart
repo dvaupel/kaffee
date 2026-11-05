@@ -27,23 +27,16 @@ class SettingsScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
                 child: Text(
-                  'Tipp: Einen Eintrag gedrückt halten, um ihn als Standard '
-                  'für neue Shots anzupinnen.',
+                  'Tipp: Antippen benennt einen Eintrag um, gedrückt halten pinnt ihn '
+                  'als Standard für neue Shots an.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ),
-              _ListEditor(
-                label: 'Maschine',
-                items: store.machines,
-                pinned: d.machine,
-                onChanged: (l) {
-                  store.machines = l;
-                  _keepPin(d, 'machine', l);
-                  store.save();
-                },
-                onPin: (v) {
-                  d.machine = v;
+              _MachineEditor(
+                store: store,
+                onChanged: () {
+                  _keepPin(d, 'machine', store.machineNames);
                   store.save();
                 },
               ),
@@ -51,6 +44,8 @@ class SettingsScreen extends StatelessWidget {
                 label: 'Siebträger',
                 items: store.portafilters,
                 pinned: d.portafilter,
+                onRename: (from, to) =>
+                    store.renameEquipment('portafilter', from, to),
                 onChanged: (l) {
                   store.portafilters = l;
                   _keepPin(d, 'portafilter', l);
@@ -65,6 +60,8 @@ class SettingsScreen extends StatelessWidget {
                 label: 'Siebe',
                 items: store.baskets,
                 pinned: d.basket,
+                onRename: (from, to) =>
+                    store.renameEquipment('basket', from, to),
                 onChanged: (l) {
                   store.baskets = l;
                   _keepPin(d, 'basket', l);
@@ -159,6 +156,13 @@ class SettingsScreen extends StatelessWidget {
                       subtitle: const Text('Ersetzt alle aktuellen Daten'),
                       onTap: () => _import(context),
                     ),
+                    ListTile(
+                      leading: const Icon(Icons.history),
+                      title: const Text('Sicherungen'),
+                      subtitle: const Text(
+                          'Tägliche Schnappschüsse auf diesem Gerät'),
+                      onTap: () => _backups(context),
+                    ),
                   ],
                 ),
               ),
@@ -247,6 +251,71 @@ class SettingsScreen extends StatelessWidget {
     await store.save();
   }
 
+  Future<void> _backups(BuildContext context) async {
+    final store = Store.instance;
+    final list = await store.backups();
+    if (!context.mounted) return;
+    final pick = await showDialog<Backup>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sicherungen'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: list.isEmpty
+              ? const Text('Noch keine Sicherung vorhanden.')
+              : ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final b in list)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(fmtDateRel(b.date)),
+                        subtitle: Text('${b.reason} · '
+                            '${b.counts.$1} Shots, ${b.counts.$2} Bohnen'),
+                        onTap: () => Navigator.pop(ctx, b),
+                      ),
+                  ],
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Schließen'),
+          ),
+        ],
+      ),
+    );
+    if (pick == null || !context.mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sicherung wiederherstellen?'),
+        content: const Text('Die aktuellen Daten werden ersetzt. Vorher '
+            'entsteht automatisch eine weitere Sicherung.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Wiederherstellen'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await store.restore(pick);
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Sicherung wiederhergestellt')));
+    } catch (e) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Wiederherstellung fehlgeschlagen')));
+    }
+  }
+
   Future<void> _import(BuildContext context) async {
     final clip = await Clipboard.getData(Clipboard.kTextPlain);
     if (!context.mounted) return;
@@ -311,6 +380,7 @@ class _ListEditor extends StatelessWidget {
     required this.label,
     required this.items,
     required this.onChanged,
+    required this.onRename,
     required this.pinned,
     required this.onPin,
   });
@@ -318,15 +388,31 @@ class _ListEditor extends StatelessWidget {
   final String label;
   final List<String> items;
   final ValueChanged<List<String>> onChanged;
+  final void Function(String from, String to) onRename;
   final String? pinned;
   final ValueChanged<String?> onPin;
 
   Future<void> _add(BuildContext context) async {
-    final c = TextEditingController();
+    final v = await _ask(context, null);
+    if (v == null) return;
+    onChanged([...items, v]);
+  }
+
+  Future<void> _rename(BuildContext context, String item) async {
+    final v = await _ask(context, item);
+    if (v == null || v == item) return;
+    onRename(item, v);
+    onChanged([for (final e in items) e == item ? v : e]);
+  }
+
+  /// Fragt eine Bezeichnung ab; `null` bei Abbruch, leerem oder doppeltem Namen.
+  Future<String?> _ask(BuildContext context, String? current) async {
+    final c = TextEditingController(text: current);
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('$label hinzufügen'),
+        title:
+            Text(current == null ? '$label hinzufügen' : '$label umbenennen'),
         content: TextField(
           controller: c,
           autofocus: true,
@@ -341,14 +427,14 @@ class _ListEditor extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, c.text),
-            child: const Text('Hinzufügen'),
+            child: Text(current == null ? 'Hinzufügen' : 'Speichern'),
           ),
         ],
       ),
     );
     final v = name?.trim() ?? '';
-    if (v.isEmpty || items.contains(v)) return;
-    onChanged([...items, v]);
+    if (v.isEmpty || (v != current && items.contains(v))) return null;
+    return v;
   }
 
   @override
@@ -378,7 +464,7 @@ class _ListEditor extends StatelessWidget {
                       label: Text(item),
                       selected: item == pinned,
                       showCheckmark: false,
-                      onPressed: () {},
+                      onPressed: () => _rename(context, item),
                       onDeleted: () =>
                           onChanged(items.where((e) => e != item).toList()),
                     ),
@@ -487,15 +573,29 @@ class _DefaultsCard extends StatelessWidget {
               onTap: null, onClear: () => clear('portafilter')),
           _tile(context, Icons.filter_alt_outlined, 'Sieb', d.basket,
               onTap: null, onClear: () => clear('basket')),
-          _tile(
-            context,
-            Icons.thermostat,
-            'Temperatur',
-            d.temperature == null ? null : '${fmtSmart(d.temperature!)} °C',
-            onTap: () =>
-                _edit(context, 'temperature', 'Temperatur', '°C', true),
-            onClear: () => clear('temperature', numeric: true),
-          ),
+          if (Store.instance.machines.any((m) => m.hasLevels))
+            _tile(
+              context,
+              Icons.thermostat,
+              'Temperaturstufe',
+              d.tempLevel == null ? null : 'Stufe ${d.tempLevel}',
+              onTap: null,
+              onClear: () {
+                d.tempLevel = null;
+                onChanged();
+              },
+            ),
+          if (Store.instance.machines.any((m) => !m.hasLevels) ||
+              Store.instance.machines.isEmpty)
+            _tile(
+              context,
+              Icons.thermostat,
+              'Temperatur',
+              d.temperature == null ? null : '${fmtSmart(d.temperature!)} °C',
+              onTap: () =>
+                  _edit(context, 'temperature', 'Temperatur', '°C', true),
+              onClear: () => clear('temperature', numeric: true),
+            ),
           _tile(
             context,
             Icons.scale_outlined,
@@ -523,6 +623,129 @@ class _DefaultsCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Maschinen mit Name und Temperaturstufen. Tippen bearbeitet, gedrückt halten
+/// pinnt die Maschine als Standard.
+class _MachineEditor extends StatelessWidget {
+  const _MachineEditor({required this.store, required this.onChanged});
+
+  final Store store;
+  final VoidCallback onChanged;
+
+  Future<void> _edit(BuildContext context, Machine? m) async {
+    final name = TextEditingController(text: m?.name ?? '');
+    var levels = m?.tempLevels ?? 0;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title:
+              Text(m == null ? 'Maschine hinzufügen' : 'Maschine bearbeiten'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: name,
+                autofocus: m == null,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(labelText: 'Bezeichnung'),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Temperatur in Stufen'),
+                subtitle: const Text('Aus: genaue Gradzahl'),
+                value: levels > 0,
+                onChanged: (v) => setState(() => levels = v ? 5 : 0),
+              ),
+              if (levels > 0)
+                SegmentedButton<int>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final n in [3, 4, 5, 6, 7])
+                      ButtonSegment(value: n, label: Text('$n')),
+                  ],
+                  selected: {levels.clamp(3, 7)},
+                  onSelectionChanged: (v) => setState(() => levels = v.first),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Speichern'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final v = name.text.trim();
+    if (ok != true || v.isEmpty) return;
+    if (store.machines.any((x) => x != m && x.name == v)) return;
+    if (m == null) {
+      store.machines = [...store.machines, Machine(v, tempLevels: levels)];
+    } else {
+      store.renameMachine(m, v);
+      m.tempLevels = levels;
+    }
+    onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = store.defaults;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Maschine', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final m in store.machines)
+                  GestureDetector(
+                    onLongPress: () {
+                      HapticFeedback.heavyImpact();
+                      d.machine = m.name == d.machine ? null : m.name;
+                      onChanged();
+                    },
+                    child: InputChip(
+                      avatar: m.name == d.machine
+                          ? const Icon(Icons.push_pin, size: 18)
+                          : null,
+                      label: Text(m.hasLevels
+                          ? '${m.name} · ${m.tempLevels} Stufen'
+                          : m.name),
+                      selected: m.name == d.machine,
+                      showCheckmark: false,
+                      onPressed: () => _edit(context, m),
+                      onDeleted: () {
+                        store.machines =
+                            store.machines.where((e) => e != m).toList();
+                        onChanged();
+                      },
+                    ),
+                  ),
+                ActionChip(
+                  avatar: const Icon(Icons.add, size: 18),
+                  label: const Text('Neu'),
+                  onPressed: () => _edit(context, null),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -185,7 +185,7 @@ class _RankTile extends StatelessWidget {
       '${fmtNum(shot.doseIn)} → ${fmtNum(shot.yieldOut)} g',
       if (shot.timeSec != null) '${fmtSmart(shot.timeSec!)} s',
       if (shot.grind.isNotEmpty) 'Mahlgrad ${shot.grind}',
-      if (shot.temperature != null) '${fmtSmart(shot.temperature!)} °C',
+      if (shot.tempText != null) shot.tempText!,
     ].join('  ·  ');
     return ListTile(
       onTap: () => openShotEditor(context, shot.clone()),

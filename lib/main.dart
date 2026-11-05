@@ -11,6 +11,7 @@ import 'theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Store.instance.load();
+  await Store.instance.autoSnapshot();
   runApp(const KaffeeApp());
 }
 

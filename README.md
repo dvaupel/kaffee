@@ -5,7 +5,7 @@ Parameter vergleichen, pro Bohne das beste Rezept finden.
 
 ## Funktionen (v0.1)
 
-- Shot erfassen: Bohne, Mahlgrad, Siebträger, Sieb, Temperatur, Dosis, Ausbeute, Zeit, Druck
+- Shot erfassen: Bohne, Mahlgrad, Siebträger, Sieb, Temperatur (in °C oder als Maschinenstufe), Dosis, Ausbeute, Zeit, Druck
 - Shot-Timer mit Ampel (im Setup abschaltbar, z. B. bei Waage mit eigenem Timer) gegen die Zielwerte (25 bis 28 s, 1:2,5, 9 bis 11 bar, anpassbar)
 - Geschmack: Säure, Bitterkeit, Gesamteindruck, Notizen
 - Einstellhilfe ("feiner mahlen", "gröber mahlen", ...)

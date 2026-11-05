@@ -85,10 +85,10 @@ class ShotCard extends StatelessWidget {
                       text: '${fmtSmart(shot.pressure!)} bar',
                       level: t.pressureLevel(shot.pressure),
                     ),
-                  if (shot.temperature != null)
+                  if (shot.tempText != null)
                     MetricChip(
                       icon: Icons.thermostat,
-                      text: '${fmtSmart(shot.temperature!)} °C',
+                      text: shot.tempText!,
                       level: Level.none,
                     ),
                 ],
